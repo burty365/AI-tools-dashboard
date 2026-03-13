@@ -21,30 +21,24 @@ export default function App() {
           margin: "0 auto",
         }}
       >
-        {/* Route Planner */}
         <button
           style={liveButton}
-          onClick={() =>
-            window.open("https://nuage-route-planner.vercel.app", "_blank")
-          }
+          onClick={() => {
+            window.open("https://nuage-route-planner.vercel.app", "_blank");
+          }}
         >
           Route Planner
         </button>
 
-        {/* Gmail Converter */}
         <button
           style={liveButton}
-          onClick={() =>
-            window.open(
-              "https://nuage-gmail-extractor.vercel.app",
-              "_blank"
-            )
-          }
+          onClick={() => {
+            window.open("https://nuage-gmail-extractor.vercel.app", "_blank");
+          }}
         >
           Gmail Converter
         </button>
 
-        {/* Future Tools */}
         <button style={comingButton}>Coming Soon</button>
         <button style={comingButton}>Coming Soon</button>
         <button style={comingButton}>Coming Soon</button>
