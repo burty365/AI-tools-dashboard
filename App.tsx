@@ -10,8 +10,11 @@ export default function App() {
     }}>
 
       <img 
-https://i.postimg.cc/sDbHQkRq/Whats-App-Image-2026-01-14-at-13-43-45.jpg        alt="Nu Age Logo"
-        style={{width:"320px", marginBottom:"40px"}}
+<img
+  src="/nuage-logo.png"
+  alt="Nu Age Logo"
+  style={{ width: "420px", maxWidth: "90%", marginBottom: "40px" }}
+/>
       />
 
       <h1>Nu Age AI Tools</h1>
