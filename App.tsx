@@ -24,10 +24,7 @@ export default function App() {
         <button
           style={liveButton}
           onClick={() =>
-            window.open(
-              "https://nuage-route-planner.vercel.app",
-              "_blank"
-            )
+            window.open("https://nuage-route-planner.vercel.app", "_blank")
           }
         >
           Route Planner
@@ -36,10 +33,7 @@ export default function App() {
         <button
           style={liveButton}
           onClick={() =>
-            window.open(
-              "https://gmail-com.vercel.app",
-              "_blank"
-            )
+            window.open("https://gmail-com-m4q1.vercel.app", "_blank")
           }
         >
           Gmail Converter
