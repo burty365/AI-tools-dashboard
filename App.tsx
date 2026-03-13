@@ -31,9 +31,12 @@ export default function App() {
         </button>
 
         <button
-          style={liveButton}
-          onClick={() =>
-            window.open("https://gmail-com-m4q1.vercel.app", "_blank")
+          <button
+  style={liveButton}
+  onClick={() => window.open("https://nuage-gmail-extractor.vercel.app", "_blank")}
+>
+  Gmail Converter
+</button>
           }
         >
           Gmail Converter
