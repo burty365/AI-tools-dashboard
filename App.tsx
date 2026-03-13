@@ -10,16 +10,6 @@ export default function App() {
         padding: "40px 20px",
       }}
     >
-      <img
-        src="/nuage-logo.png"
-        alt="Nu Age Logo"
-        style={{
-          width: "420px",
-          maxWidth: "90%",
-          marginBottom: "30px",
-        }}
-      />
-
       <h1 style={{ marginBottom: "30px" }}>Nu Age AI Tools</h1>
 
       <div
@@ -33,14 +23,24 @@ export default function App() {
       >
         <button
           style={liveButton}
-          onClick={() => window.open("PASTE_ROUTE_PLANNER_LINK_HERE", "_blank")}
+          onClick={() =>
+            window.open(
+              "https://nuage-route-planner.vercel.app",
+              "_blank"
+            )
+          }
         >
           Route Planner
         </button>
 
         <button
           style={liveButton}
-          onClick={() => window.open("PASTE_GMAIL_CONVERTER_LINK_HERE", "_blank")}
+          onClick={() =>
+            window.open(
+              "https://gmail-com.vercel.app",
+              "_blank"
+            )
+          }
         >
           Gmail Converter
         </button>
