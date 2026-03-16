@@ -30,21 +30,13 @@ export default function App() {
           Route Planner
         </button>
 
-        <button
-          style={liveButton}
-          onClick={() => {
-            window.open("https://nuage-gmail-extractor.vercel.app", "_blank");
-          }}
-        >
-          Gmail Converter
-        </button>
-
-        <button style={comingButton}>Coming Soon</button>
-        <button style={comingButton}>Coming Soon</button>
-        <button style={comingButton}>Coming Soon</button>
-        <button style={comingButton}>Coming Soon</button>
-        <button style={comingButton}>Coming Soon</button>
-        <button style={comingButton}>Coming Soon</button>
+        <button style={comingButton}>🔒 Gmail Converter</button>
+        <button style={comingButton}>🔒 Coming Soon</button>
+        <button style={comingButton}>🔒 Coming Soon</button>
+        <button style={comingButton}>🔒 Coming Soon</button>
+        <button style={comingButton}>🔒 Coming Soon</button>
+        <button style={comingButton}>🔒 Coming Soon</button>
+        <button style={comingButton}>🔒 Coming Soon</button>
       </div>
     </div>
   );
@@ -58,6 +50,7 @@ const liveButton = {
   color: "white",
   fontSize: "18px",
   cursor: "pointer",
+  fontWeight: "bold" as const,
 };
 
 const comingButton = {
@@ -67,4 +60,6 @@ const comingButton = {
   background: "#334766",
   color: "#a7b4c8",
   fontSize: "18px",
+  cursor: "not-allowed",
+  fontWeight: "bold" as const,
 };
