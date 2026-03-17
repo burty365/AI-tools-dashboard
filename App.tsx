@@ -10,7 +10,7 @@ type Reply = {
 };
 
 type PostStatus = "Open" | "Solved" | "Archived";
-type FilterStatus = "All" | PostStatus;
+type FilterStatus = "Live" | "Solved" | "Archive";
 
 type Post = {
   id: string;
@@ -46,7 +46,7 @@ type Profile = {
 export default function App() {
   const [page, setPage] = useState<"home" | "feed">("home");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [filter, setFilter] = useState<FilterStatus>("All");
+  const [filter, setFilter] = useState<FilterStatus>("Live");
 
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -406,13 +406,35 @@ export default function App() {
   };
 
   const filteredPosts = useMemo(() => {
-    if (filter === "All") return posts;
-    return posts.filter((post) => post.status === filter);
+    if (filter === "Live") {
+      return posts.filter((post) => post.status !== "Archived");
+    }
+
+    if (filter === "Solved") {
+      return posts.filter((post) => post.status === "Solved");
+    }
+
+    if (filter === "Archive") {
+      return posts.filter((post) => post.status === "Archived");
+    }
+
+    return posts;
   }, [posts, filter]);
 
   const countByStatus = (status: FilterStatus) => {
-    if (status === "All") return posts.length;
-    return posts.filter((post) => post.status === status).length;
+    if (status === "Live") {
+      return posts.filter((post) => post.status !== "Archived").length;
+    }
+
+    if (status === "Solved") {
+      return posts.filter((post) => post.status === "Solved").length;
+    }
+
+    if (status === "Archive") {
+      return posts.filter((post) => post.status === "Archived").length;
+    }
+
+    return 0;
   };
 
   if (!authReady) {
@@ -616,7 +638,7 @@ export default function App() {
                 marginBottom: "20px",
               }}
             >
-              {(["All", "Open", "Solved", "Archived"] as FilterStatus[]).map((status) => (
+              {(["Live", "Solved", "Archive"] as FilterStatus[]).map((status) => (
                 <button
                   key={status}
                   onClick={() => setFilter(status)}
