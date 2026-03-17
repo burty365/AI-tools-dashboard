@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { supabase } from "./src/lib/supabase";
+import { supabase } from "./lib/supabase";
 
 type Reply = {
   id: string;
@@ -363,7 +363,7 @@ export default function App() {
                         display: "block",
                         cursor: "pointer",
                       }}
-                      onClick={() => setSelectedImage(post.image!)}
+                      onClick={() => setSelectedImage(post.image)}
                     />
                   )}
 
