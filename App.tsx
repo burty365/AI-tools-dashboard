@@ -13,6 +13,7 @@ type Post = {
   text: string;
   image?: string;
   replies: Reply[];
+  createdAt: number;
 };
 
 export default function App() {
@@ -28,6 +29,16 @@ export default function App() {
   const [replyInputs, setReplyInputs] = useState<Record<number, string>>({});
   const [replyNames, setReplyNames] = useState<Record<number, string>>({});
 
+  const timeAgo = (timestamp: number) => {
+    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+
+    if (seconds < 60) return "just now";
+    if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
+    if (seconds < 86400) return `${Math.floor(seconds / 3600)} hrs ago`;
+
+    return `${Math.floor(seconds / 86400)} days ago`;
+  };
+
   const addPost = () => {
     if (!text.trim()) return;
 
@@ -38,6 +49,7 @@ export default function App() {
       text: text.trim(),
       image,
       replies: [],
+      createdAt: Date.now(),
     };
 
     setPosts([newPost, ...posts]);
@@ -202,7 +214,13 @@ export default function App() {
                       flexWrap: "wrap",
                     }}
                   >
-                    <strong>{post.name}</strong>
+                    <div>
+                      <strong>{post.name}</strong>
+                      <div style={{ fontSize: "12px", color: "#a7b4c8", marginTop: "4px" }}>
+                        {timeAgo(post.createdAt)}
+                      </div>
+                    </div>
+
                     <span
                       style={{
                         background:
