@@ -1,19 +1,31 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { supabase } from "./src/lib/supabase";
 
 type Reply = {
-  id: number;
+  id: string;
   name: string;
   text: string;
+  createdAt: string;
 };
 
 type Post = {
-  id: number;
+  id: string;
   name: string;
   tag: string;
   text: string;
   image?: string;
   replies: Reply[];
-  createdAt: number;
+  createdAt: string;
+};
+
+type CommentRow = {
+  id: string;
+  content: string | null;
+  image_url: string | null;
+  parent_id: string | null;
+  created_at: string;
+  name: string | null;
+  tag: string | null;
 };
 
 export default function App() {
@@ -21,16 +33,19 @@ export default function App() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState(false);
+
   const [name, setName] = useState("");
   const [tag, setTag] = useState("Idea");
   const [text, setText] = useState("");
-  const [image, setImage] = useState<string | undefined>(undefined);
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | undefined>(undefined);
 
-  const [replyInputs, setReplyInputs] = useState<Record<number, string>>({});
-  const [replyNames, setReplyNames] = useState<Record<number, string>>({});
+  const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
+  const [replyNames, setReplyNames] = useState<Record<string, string>>({});
 
-  const timeAgo = (timestamp: number) => {
-    const seconds = Math.floor((Date.now() - timestamp) / 1000);
+  const timeAgo = (timestamp: string) => {
+    const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
 
     if (seconds < 60) return "just now";
     if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
@@ -39,59 +54,137 @@ export default function App() {
     return `${Math.floor(seconds / 86400)} days ago`;
   };
 
-  const addPost = () => {
-    if (!text.trim()) return;
+  const loadPosts = async () => {
+    setLoading(true);
 
-    const newPost: Post = {
-      id: Date.now(),
-      name: name.trim() || "Anonymous",
-      tag,
-      text: text.trim(),
-      image,
-      replies: [],
-      createdAt: Date.now(),
-    };
+    const { data, error } = await supabase
+      .from("comments")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    setPosts([newPost, ...posts]);
-    setText("");
-    setImage(undefined);
-    setTag("Idea");
+    if (error) {
+      console.error("Error loading posts:", error);
+      setLoading(false);
+      return;
+    }
+
+    const rows = (data || []) as CommentRow[];
+
+    const postRows = rows.filter((row) => !row.parent_id);
+    const replyRows = rows.filter((row) => !!row.parent_id);
+
+    const mappedPosts: Post[] = postRows.map((post) => ({
+      id: post.id,
+      name: post.name || "Anonymous",
+      tag: post.tag || "Idea",
+      text: post.content || "",
+      image: post.image_url || undefined,
+      createdAt: post.created_at,
+      replies: replyRows
+        .filter((reply) => reply.parent_id === post.id)
+        .sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+        .map((reply) => ({
+          id: reply.id,
+          name: reply.name || "Anonymous",
+          text: reply.content || "",
+          createdAt: reply.created_at,
+        })),
+    }));
+
+    setPosts(mappedPosts);
+    setLoading(false);
   };
 
-  const addReply = (postId: number) => {
+  useEffect(() => {
+    if (page === "feed") {
+      loadPosts();
+    }
+  }, [page]);
+
+  const uploadImage = async (file: File) => {
+    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
+
+    const { error } = await supabase.storage
+      .from("comments")
+      .upload(fileName, file);
+
+    if (error) {
+      console.error("Upload error:", error);
+      return null;
+    }
+
+    const { data } = supabase.storage.from("comments").getPublicUrl(fileName);
+    return data.publicUrl;
+  };
+
+  const addPost = async () => {
+    if (!text.trim()) return;
+
+    let imageUrl: string | null = null;
+
+    if (imageFile) {
+      imageUrl = await uploadImage(imageFile);
+    }
+
+    const { error } = await supabase.from("comments").insert([
+      {
+        content: text.trim(),
+        image_url: imageUrl,
+        parent_id: null,
+        name: name.trim() || "Anonymous",
+        tag,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error saving post:", error);
+      return;
+    }
+
+    setText("");
+    setImageFile(null);
+    setImagePreview(undefined);
+    setTag("Idea");
+
+    await loadPosts();
+  };
+
+  const addReply = async (postId: string) => {
     const replyText = (replyInputs[postId] || "").trim();
     const replyName = (replyNames[postId] || "").trim() || "Anonymous";
 
     if (!replyText) return;
 
-    setPosts((currentPosts) =>
-      currentPosts.map((post) =>
-        post.id === postId
-          ? {
-              ...post,
-              replies: [
-                ...post.replies,
-                {
-                  id: Date.now(),
-                  name: replyName,
-                  text: replyText,
-                },
-              ],
-            }
-          : post
-      )
-    );
+    const { error } = await supabase.from("comments").insert([
+      {
+        content: replyText,
+        parent_id: postId,
+        name: replyName,
+        tag: null,
+      },
+    ]);
+
+    if (error) {
+      console.error("Error saving reply:", error);
+      return;
+    }
 
     setReplyInputs((prev) => ({ ...prev, [postId]: "" }));
+    await loadPosts();
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setImageFile(file);
+
     const reader = new FileReader();
     reader.onloadend = () => {
-      setImage(reader.result as string);
+      setImagePreview(reader.result as string);
     };
     reader.readAsDataURL(file);
   };
@@ -158,9 +251,9 @@ export default function App() {
                 <input type="file" accept="image/*" onChange={handleImageUpload} />
               </div>
 
-              {image && (
+              {imagePreview && (
                 <img
-                  src={image}
+                  src={imagePreview}
                   alt="Preview"
                   style={{
                     width: "100%",
@@ -172,7 +265,7 @@ export default function App() {
                     display: "block",
                     cursor: "pointer",
                   }}
-                  onClick={() => setSelectedImage(image)}
+                  onClick={() => setSelectedImage(imagePreview)}
                 />
               )}
 
@@ -181,7 +274,18 @@ export default function App() {
               </button>
             </div>
 
-            {posts.length === 0 ? (
+            {loading ? (
+              <div
+                style={{
+                  background: "#102348",
+                  padding: "20px",
+                  borderRadius: "14px",
+                  textAlign: "center",
+                }}
+              >
+                Loading...
+              </div>
+            ) : posts.length === 0 ? (
               <div
                 style={{
                   background: "#102348",
@@ -287,6 +391,9 @@ export default function App() {
                           }}
                         >
                           <strong>{reply.name}</strong>
+                          <div style={{ fontSize: "12px", color: "#a7b4c8", marginTop: "4px" }}>
+                            {timeAgo(reply.createdAt)}
+                          </div>
                           <div style={{ marginTop: "5px" }}>{reply.text}</div>
                         </div>
                       ))
