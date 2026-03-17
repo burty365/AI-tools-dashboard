@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
 
 type Reply = {
@@ -8,6 +9,9 @@ type Reply = {
   createdAt: string;
 };
 
+type PostStatus = "Open" | "Solved" | "Archived";
+type FilterStatus = "All" | PostStatus;
+
 type Post = {
   id: string;
   name: string;
@@ -16,6 +20,7 @@ type Post = {
   image?: string;
   replies: Reply[];
   createdAt: string;
+  status: PostStatus;
 };
 
 type CommentRow = {
@@ -26,23 +31,43 @@ type CommentRow = {
   created_at: string;
   name: string | null;
   tag: string | null;
+  status: string | null;
+  user_id: string | null;
+  user_email: string | null;
+};
+
+type Profile = {
+  id: string;
+  email: string | null;
+  full_name: string | null;
+  role: string | null;
 };
 
 export default function App() {
   const [page, setPage] = useState<"home" | "feed">("home");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterStatus>("All");
+
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [authReady, setAuthReady] = useState(false);
+
+  const [authMode, setAuthMode] = useState<"login" | "signup">("login");
+  const [authEmail, setAuthEmail] = useState("");
+  const [authPassword, setAuthPassword] = useState("");
+  const [authName, setAuthName] = useState("");
+  const [authLoading, setAuthLoading] = useState(false);
+  const [authMessage, setAuthMessage] = useState("");
 
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const [name, setName] = useState("");
   const [tag, setTag] = useState("Idea");
   const [text, setText] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | undefined>(undefined);
 
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
-  const [replyNames, setReplyNames] = useState<Record<string, string>>({});
 
   const timeAgo = (timestamp: string) => {
     const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
@@ -54,7 +79,106 @@ export default function App() {
     return `${Math.floor(seconds / 86400)} days ago`;
   };
 
+  const tagColor = (tagValue: string) => {
+    if (tagValue === "Bug") return "#b94141";
+    if (tagValue === "Question") return "#8a6d1f";
+    if (tagValue === "Update") return "#2a6fa1";
+    return "#3f7d36";
+  };
+
+  const statusColor = (status: PostStatus) => {
+    if (status === "Solved") return "#2f8f4e";
+    if (status === "Archived") return "#5b6575";
+    return "#d08b28";
+  };
+
+  const currentUserName =
+    profile?.full_name?.trim() ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.email?.split("@")[0] ||
+    "User";
+
+  const currentUserEmail = session?.user?.email || "";
+
+  const ensureProfile = async (user: User, explicitName?: string) => {
+    const fallbackName =
+      explicitName?.trim() ||
+      user.user_metadata?.full_name ||
+      user.email?.split("@")[0] ||
+      "User";
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("*")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Profile load error:", error);
+      return;
+    }
+
+    if (!data) {
+      const { error: insertError } = await supabase.from("profiles").upsert({
+        id: user.id,
+        email: user.email || null,
+        full_name: fallbackName,
+      });
+
+      if (insertError) {
+        console.error("Profile create error:", insertError);
+        return;
+      }
+
+      setProfile({
+        id: user.id,
+        email: user.email || null,
+        full_name: fallbackName,
+        role: "staff",
+      });
+      return;
+    }
+
+    setProfile(data as Profile);
+  };
+
+  useEffect(() => {
+    const boot = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      setSession(session);
+
+      if (session?.user) {
+        await ensureProfile(session.user);
+      }
+
+      setAuthReady(true);
+    };
+
+    boot();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      setSession(session);
+
+      if (session?.user) {
+        await ensureProfile(session.user);
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
   const loadPosts = async () => {
+    if (!session) return;
+
     setLoading(true);
 
     const { data, error } = await supabase
@@ -64,6 +188,7 @@ export default function App() {
 
     if (error) {
       console.error("Error loading posts:", error);
+      alert(`Load error: ${error.message}`);
       setLoading(false);
       return;
     }
@@ -80,6 +205,10 @@ export default function App() {
       text: post.content || "",
       image: post.image_url || undefined,
       createdAt: post.created_at,
+      status:
+        post.status === "Solved" || post.status === "Archived"
+          ? post.status
+          : "Open",
       replies: replyRows
         .filter((reply) => reply.parent_id === post.id)
         .sort(
@@ -99,10 +228,10 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (page === "feed") {
+    if (page === "feed" && session) {
       loadPosts();
     }
-  }, [page]);
+  }, [page, session]);
 
   const uploadImage = async (file: File) => {
     const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
@@ -113,6 +242,7 @@ export default function App() {
 
     if (error) {
       console.error("Upload error:", error);
+      alert(`Upload error: ${error.message}`);
       return null;
     }
 
@@ -121,12 +251,13 @@ export default function App() {
   };
 
   const addPost = async () => {
-    if (!text.trim()) return;
+    if (!session || !text.trim()) return;
 
     let imageUrl: string | null = null;
 
     if (imageFile) {
       imageUrl = await uploadImage(imageFile);
+      if (!imageUrl) return;
     }
 
     const { error } = await supabase.from("comments").insert([
@@ -134,13 +265,17 @@ export default function App() {
         content: text.trim(),
         image_url: imageUrl,
         parent_id: null,
-        name: name.trim() || "Anonymous",
+        name: currentUserName,
         tag,
+        status: "Open",
+        user_id: session.user.id,
+        user_email: currentUserEmail,
       },
     ]);
 
     if (error) {
       console.error("Error saving post:", error);
+      alert(`Save error: ${error.message}`);
       return;
     }
 
@@ -153,8 +288,9 @@ export default function App() {
   };
 
   const addReply = async (postId: string) => {
+    if (!session) return;
+
     const replyText = (replyInputs[postId] || "").trim();
-    const replyName = (replyNames[postId] || "").trim() || "Anonymous";
 
     if (!replyText) return;
 
@@ -162,17 +298,36 @@ export default function App() {
       {
         content: replyText,
         parent_id: postId,
-        name: replyName,
+        name: currentUserName,
         tag: null,
+        status: null,
+        user_id: session.user.id,
+        user_email: currentUserEmail,
       },
     ]);
 
     if (error) {
       console.error("Error saving reply:", error);
+      alert(`Reply error: ${error.message}`);
       return;
     }
 
     setReplyInputs((prev) => ({ ...prev, [postId]: "" }));
+    await loadPosts();
+  };
+
+  const updatePostStatus = async (postId: string, status: PostStatus) => {
+    const { error } = await supabase
+      .from("comments")
+      .update({ status })
+      .eq("id", postId);
+
+    if (error) {
+      console.error("Error updating status:", error);
+      alert(`Status error: ${error.message}`);
+      return;
+    }
+
     await loadPosts();
   };
 
@@ -189,6 +344,161 @@ export default function App() {
     reader.readAsDataURL(file);
   };
 
+  const handleSignUp = async () => {
+    if (!authEmail.trim() || !authPassword.trim() || !authName.trim()) {
+      alert("Please enter name, email and password.");
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthMessage("");
+
+    const { data, error } = await supabase.auth.signUp({
+      email: authEmail.trim(),
+      password: authPassword,
+      options: {
+        data: {
+          full_name: authName.trim(),
+        },
+      },
+    });
+
+    setAuthLoading(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    if (data.user && data.session) {
+      await ensureProfile(data.user, authName.trim());
+      setAuthMessage("Account created and logged in.");
+    } else {
+      setAuthMessage("Account created. Check email to confirm, then log in.");
+    }
+  };
+
+  const handleLogin = async () => {
+    if (!authEmail.trim() || !authPassword.trim()) {
+      alert("Please enter email and password.");
+      return;
+    }
+
+    setAuthLoading(true);
+    setAuthMessage("");
+
+    const { error } = await supabase.auth.signInWithPassword({
+      email: authEmail.trim(),
+      password: authPassword,
+    });
+
+    setAuthLoading(false);
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setPage("home");
+  };
+
+  const filteredPosts = useMemo(() => {
+    if (filter === "All") return posts;
+    return posts.filter((post) => post.status === filter);
+  }, [posts, filter]);
+
+  const countByStatus = (status: FilterStatus) => {
+    if (status === "All") return posts.length;
+    return posts.filter((post) => post.status === status).length;
+  };
+
+  if (!authReady) {
+    return (
+      <div style={loadingScreenStyle}>
+        <div style={authCardStyle}>Loading...</div>
+      </div>
+    );
+  }
+
+  if (!session) {
+    return (
+      <div style={loadingScreenStyle}>
+        <div style={authCardStyle}>
+          <h1 style={{ marginTop: 0, marginBottom: "10px", color: "white" }}>
+            Nu Age AI Tools
+          </h1>
+          <p style={{ color: "#b7c5d9", marginBottom: "20px" }}>
+            Sign in to access Team Feed and tools
+          </p>
+
+          <div style={{ display: "flex", gap: "10px", marginBottom: "16px" }}>
+            <button
+              style={{
+                ...authTabStyle,
+                background: authMode === "login" ? "#6cc04a" : "#1a2d57",
+              }}
+              onClick={() => setAuthMode("login")}
+            >
+              Login
+            </button>
+            <button
+              style={{
+                ...authTabStyle,
+                background: authMode === "signup" ? "#6cc04a" : "#1a2d57",
+              }}
+              onClick={() => setAuthMode("signup")}
+            >
+              Sign up
+            </button>
+          </div>
+
+          {authMode === "signup" && (
+            <input
+              placeholder="Full name"
+              value={authName}
+              onChange={(e) => setAuthName(e.target.value)}
+              style={inputStyle}
+            />
+          )}
+
+          <input
+            placeholder="Email address"
+            value={authEmail}
+            onChange={(e) => setAuthEmail(e.target.value)}
+            style={inputStyle}
+          />
+
+          <input
+            placeholder="Password"
+            type="password"
+            value={authPassword}
+            onChange={(e) => setAuthPassword(e.target.value)}
+            style={inputStyle}
+          />
+
+          <button
+            style={{ ...liveButton, width: "100%" }}
+            onClick={authMode === "login" ? handleLogin : handleSignUp}
+            disabled={authLoading}
+          >
+            {authLoading
+              ? "Please wait..."
+              : authMode === "login"
+              ? "Login"
+              : "Create account"}
+          </button>
+
+          {authMessage && (
+            <div style={{ color: "#b7c5d9", marginTop: "14px" }}>{authMessage}</div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   if (page === "feed") {
     return (
       <>
@@ -201,15 +511,36 @@ export default function App() {
             padding: "40px 20px",
           }}
         >
-          <h1 style={{ textAlign: "center", marginBottom: "20px" }}>Team Feed</h1>
-
           <div style={{ maxWidth: "850px", margin: "0 auto" }}>
-            <button
-              style={{ ...liveButton, marginBottom: "20px" }}
-              onClick={() => setPage("home")}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "12px",
+                alignItems: "center",
+                flexWrap: "wrap",
+                marginBottom: "20px",
+              }}
             >
-              ← Back
-            </button>
+              <div>
+                <h1 style={{ margin: 0 }}>Team Feed</h1>
+                <div style={{ color: "#b7c5d9", marginTop: "6px" }}>
+                  Logged in as {currentUserName}
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                <button style={smallActionButton} onClick={() => setPage("home")}>
+                  ← Back
+                </button>
+                <button
+                  style={{ ...smallActionButton, background: "#5b6575" }}
+                  onClick={handleLogout}
+                >
+                  Logout
+                </button>
+              </div>
+            </div>
 
             <div
               style={{
@@ -222,12 +553,15 @@ export default function App() {
             >
               <h2 style={{ marginTop: 0 }}>Create Post</h2>
 
-              <input
-                placeholder="Your name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                style={inputStyle}
-              />
+              <div
+                style={{
+                  color: "#b7c5d9",
+                  marginBottom: "12px",
+                  fontSize: "14px",
+                }}
+              >
+                Posting as <strong>{currentUserName}</strong>
+              </div>
 
               <select
                 value={tag}
@@ -274,6 +608,29 @@ export default function App() {
               </button>
             </div>
 
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                flexWrap: "wrap",
+                marginBottom: "20px",
+              }}
+            >
+              {(["All", "Open", "Solved", "Archived"] as FilterStatus[]).map((status) => (
+                <button
+                  key={status}
+                  onClick={() => setFilter(status)}
+                  style={{
+                    ...filterButton,
+                    background: filter === status ? "#6cc04a" : "#1a2d57",
+                    color: "white",
+                  }}
+                >
+                  {status} ({countByStatus(status)})
+                </button>
+              ))}
+            </div>
+
             {loading ? (
               <div
                 style={{
@@ -285,7 +642,7 @@ export default function App() {
               >
                 Loading...
               </div>
-            ) : posts.length === 0 ? (
+            ) : filteredPosts.length === 0 ? (
               <div
                 style={{
                   background: "#102348",
@@ -294,10 +651,10 @@ export default function App() {
                   textAlign: "center",
                 }}
               >
-                No posts yet
+                No posts in this filter
               </div>
             ) : (
-              posts.map((post) => (
+              filteredPosts.map((post) => (
                 <div
                   key={post.id}
                   style={{
@@ -306,6 +663,7 @@ export default function App() {
                     borderRadius: "14px",
                     marginBottom: "18px",
                     textAlign: "left",
+                    opacity: post.status === "Archived" ? 0.75 : 1,
                   }}
                 >
                   <div
@@ -325,24 +683,38 @@ export default function App() {
                       </div>
                     </div>
 
-                    <span
+                    <div
                       style={{
-                        background:
-                          post.tag === "Bug"
-                            ? "#b94141"
-                            : post.tag === "Question"
-                            ? "#8a6d1f"
-                            : post.tag === "Update"
-                            ? "#2a6fa1"
-                            : "#3f7d36",
-                        padding: "6px 10px",
-                        borderRadius: "999px",
-                        fontSize: "13px",
-                        fontWeight: "bold",
+                        display: "flex",
+                        gap: "8px",
+                        flexWrap: "wrap",
+                        alignItems: "center",
                       }}
                     >
-                      {post.tag}
-                    </span>
+                      <span
+                        style={{
+                          background: tagColor(post.tag),
+                          padding: "6px 10px",
+                          borderRadius: "999px",
+                          fontSize: "13px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {post.tag}
+                      </span>
+
+                      <span
+                        style={{
+                          background: statusColor(post.status),
+                          padding: "6px 10px",
+                          borderRadius: "999px",
+                          fontSize: "13px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {post.status}
+                      </span>
+                    </div>
                   </div>
 
                   <div style={{ whiteSpace: "pre-wrap", marginBottom: "12px" }}>
@@ -366,6 +738,42 @@ export default function App() {
                       onClick={() => setSelectedImage(post.image)}
                     />
                   )}
+
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "10px",
+                      flexWrap: "wrap",
+                      marginBottom: "14px",
+                    }}
+                  >
+                    {post.status !== "Open" && (
+                      <button
+                        style={smallActionButton}
+                        onClick={() => updatePostStatus(post.id, "Open")}
+                      >
+                        Re-open
+                      </button>
+                    )}
+
+                    {post.status !== "Solved" && (
+                      <button
+                        style={smallActionButton}
+                        onClick={() => updatePostStatus(post.id, "Solved")}
+                      >
+                        Mark Solved
+                      </button>
+                    )}
+
+                    {post.status !== "Archived" && (
+                      <button
+                        style={{ ...smallActionButton, background: "#5b6575" }}
+                        onClick={() => updatePostStatus(post.id, "Archived")}
+                      >
+                        Archive
+                      </button>
+                    )}
+                  </div>
 
                   <div
                     style={{
@@ -398,18 +806,6 @@ export default function App() {
                         </div>
                       ))
                     )}
-
-                    <input
-                      placeholder="Your name"
-                      value={replyNames[post.id] || ""}
-                      onChange={(e) =>
-                        setReplyNames((prev) => ({
-                          ...prev,
-                          [post.id]: e.target.value,
-                        }))
-                      }
-                      style={inputStyle}
-                    />
 
                     <textarea
                       placeholder="Write a reply..."
@@ -480,36 +876,61 @@ export default function App() {
         padding: "40px 20px",
       }}
     >
-      <h1 style={{ marginBottom: "30px" }}>Nu Age AI Tools</h1>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-          gap: "18px",
-          maxWidth: "900px",
-          margin: "0 auto",
-        }}
-      >
-        <button
-          style={liveButton}
-          onClick={() => {
-            window.open("https://nuage-route-planner.vercel.app", "_blank");
+      <div style={{ maxWidth: "900px", margin: "0 auto" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            gap: "12px",
+            alignItems: "center",
+            flexWrap: "wrap",
+            marginBottom: "30px",
           }}
         >
-          Route Planner
-        </button>
+          <div style={{ textAlign: "left" }}>
+            <h1 style={{ margin: 0 }}>Nu Age AI Tools</h1>
+            <div style={{ color: "#b7c5d9", marginTop: "6px" }}>
+              Logged in as {currentUserName}
+            </div>
+          </div>
 
-        <button style={liveButton} onClick={() => setPage("feed")}>
-          Team Feed
-        </button>
+          <button
+            style={{ ...smallActionButton, background: "#5b6575" }}
+            onClick={handleLogout}
+          >
+            Logout
+          </button>
+        </div>
 
-        <button style={comingButton}>🔒 Gmail Converter</button>
-        <button style={comingButton}>🔒 Coming Soon</button>
-        <button style={comingButton}>🔒 Coming Soon</button>
-        <button style={comingButton}>🔒 Coming Soon</button>
-        <button style={comingButton}>🔒 Coming Soon</button>
-        <button style={comingButton}>🔒 Coming Soon</button>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+            gap: "18px",
+            maxWidth: "900px",
+            margin: "0 auto",
+          }}
+        >
+          <button
+            style={liveButton}
+            onClick={() => {
+              window.open("https://nuage-route-planner.vercel.app", "_blank");
+            }}
+          >
+            Route Planner
+          </button>
+
+          <button style={liveButton} onClick={() => setPage("feed")}>
+            Team Feed
+          </button>
+
+          <button style={comingButton}>🔒 Gmail Converter</button>
+          <button style={comingButton}>🔒 Coming Soon</button>
+          <button style={comingButton}>🔒 Coming Soon</button>
+          <button style={comingButton}>🔒 Coming Soon</button>
+          <button style={comingButton}>🔒 Coming Soon</button>
+          <button style={comingButton}>🔒 Coming Soon</button>
+        </div>
       </div>
     </div>
   );
@@ -537,6 +958,25 @@ const comingButton = {
   fontWeight: "bold" as const,
 };
 
+const filterButton = {
+  padding: "10px 14px",
+  borderRadius: "999px",
+  border: "none",
+  cursor: "pointer",
+  fontWeight: "bold" as const,
+  fontSize: "14px",
+};
+
+const smallActionButton = {
+  padding: "10px 14px",
+  borderRadius: "10px",
+  border: "none",
+  background: "#6cc04a",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: "bold" as const,
+};
+
 const inputStyle = {
   width: "100%",
   padding: "12px",
@@ -555,4 +995,36 @@ const textAreaStyle = {
   marginBottom: "12px",
   boxSizing: "border-box" as const,
   resize: "vertical" as const,
+};
+
+const loadingScreenStyle = {
+  fontFamily: "Arial, sans-serif",
+  background: "#071535",
+  color: "white",
+  minHeight: "100vh",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "20px",
+};
+
+const authCardStyle = {
+  width: "100%",
+  maxWidth: "420px",
+  background: "#102348",
+  padding: "24px",
+  borderRadius: "16px",
+  boxSizing: "border-box" as const,
+  textAlign: "left" as const,
+  boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
+};
+
+const authTabStyle = {
+  flex: 1,
+  padding: "12px",
+  border: "none",
+  borderRadius: "10px",
+  color: "white",
+  cursor: "pointer",
+  fontWeight: "bold" as const,
 };
