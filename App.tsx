@@ -115,6 +115,12 @@ export default function App() {
 
     if (error) {
       console.error("Profile load error:", error);
+      setProfile({
+        id: user.id,
+        email: user.email || null,
+        full_name: fallbackName,
+        role: "staff",
+      });
       return;
     }
 
@@ -127,6 +133,12 @@ export default function App() {
 
       if (insertError) {
         console.error("Profile create error:", insertError);
+        setProfile({
+          id: user.id,
+          email: user.email || null,
+          full_name: fallbackName,
+          role: "staff",
+        });
         return;
       }
 
@@ -144,17 +156,25 @@ export default function App() {
 
   useEffect(() => {
     const boot = async () => {
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
 
-      setSession(session);
+        setSession(session);
 
-      if (session?.user) {
-        await ensureProfile(session.user);
+        if (session?.user) {
+          try {
+            await ensureProfile(session.user);
+          } catch (err) {
+            console.error("ensureProfile boot error:", err);
+          }
+        }
+      } catch (err) {
+        console.error("auth boot error:", err);
+      } finally {
+        setAuthReady(true);
       }
-
-      setAuthReady(true);
     };
 
     boot();
@@ -165,10 +185,16 @@ export default function App() {
       setSession(session);
 
       if (session?.user) {
-        await ensureProfile(session.user);
+        try {
+          await ensureProfile(session.user);
+        } catch (err) {
+          console.error("ensureProfile auth change error:", err);
+        }
       } else {
         setProfile(null);
       }
+
+      setAuthReady(true);
     });
 
     return () => {
