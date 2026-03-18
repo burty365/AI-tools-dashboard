@@ -157,11 +157,14 @@ export default function App() {
   useEffect(() => {
     const boot = async () => {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        const { data, error } = await supabase.auth.getSession();
 
-        setSession(session);
+if (error) {
+  console.error("Session error:", error);
+}
+
+const session = data?.session ?? null;
+setSession(session);
 
         if (session?.user) {
           try {
