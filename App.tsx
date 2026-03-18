@@ -963,9 +963,7 @@ export default function App() {
           </button>
 
 <a
-  href="https://gmail-com-m4q1.vercel.app/"
-  target="_blank"
-  rel="noreferrer"
+href="https://nuage-gmail-extractor.vercel.app/"  rel="noreferrer"
   style={liveButton}
 >
   <div className="tool-card-header">
