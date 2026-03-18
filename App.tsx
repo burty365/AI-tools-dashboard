@@ -962,7 +962,21 @@ export default function App() {
             Team Feed
           </button>
 
-          <button style={comingButton}>🔒 Gmail Converter</button>
+          <a
+  href="https://gmail-com-m4q1.vercel.app/"
+  target="_blank"
+  rel="noreferrer"
+  className="tool-card live"
+>
+  <div className="tool-card-header">
+    <h3>Gmail Converter</h3>
+    <span className="beta-badge">BETA</span>
+  </div>
+  <p>
+    Convert long email chains into cleaner, more manageable notes for the office
+    team to add into Commusoft.
+  </p>
+</a>
           <button style={comingButton}>🔒 Coming Soon</button>
           <button style={comingButton}>🔒 Coming Soon</button>
           <button style={comingButton}>🔒 Coming Soon</button>
