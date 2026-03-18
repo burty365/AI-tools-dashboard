@@ -50,7 +50,6 @@ export default function App() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [authReady, setAuthReady] = useState(false);
 
   const [authMode, setAuthMode] = useState<"login" | "signup">("login");
   const [authEmail, setAuthEmail] = useState("");
@@ -159,12 +158,12 @@ export default function App() {
       try {
         const { data, error } = await supabase.auth.getSession();
 
-if (error) {
-  console.error("Session error:", error);
-}
+        if (error) {
+          console.error("Session error:", error);
+        }
 
-const session = data?.session ?? null;
-setSession(session);
+        const session = data?.session ?? null;
+        setSession(session);
 
         if (session?.user) {
           try {
@@ -175,8 +174,6 @@ setSession(session);
         }
       } catch (err) {
         console.error("auth boot error:", err);
-      } finally {
-        setAuthReady(true);
       }
     };
 
@@ -196,8 +193,6 @@ setSession(session);
       } else {
         setProfile(null);
       }
-
-      setAuthReady(true);
     });
 
     return () => {
@@ -465,14 +460,6 @@ setSession(session);
 
     return 0;
   };
-
-  if (!authReady) {
-    return (
-      <div style={loadingScreenStyle}>
-        <div style={authCardStyle}>Loading...</div>
-      </div>
-    );
-  }
 
   if (!session) {
     return (
