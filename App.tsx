@@ -998,6 +998,14 @@ const liveButton = {
   fontSize: "18px",
   cursor: "pointer",
   fontWeight: "bold" as const,
+  textDecoration: "none",
+  display: "flex",
+  flexDirection: "column" as const,
+  justifyContent: "center",
+  alignItems: "center",
+  textAlign: "center" as const,
+  gap: "10px",
+  minHeight: "140px",
 };
 
 const comingButton = {
