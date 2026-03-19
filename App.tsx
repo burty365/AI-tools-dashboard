@@ -1,7 +1,10 @@
-import CarePlansPage from "./CarePlansPage";
 import { useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
+import CarePlansPage from "./CarePlansPage";
+
+type PostStatus = "Open" | "Solved" | "Archived";
+type FilterStatus = "Live" | "Solved" | "Archive";
 
 type Reply = {
   id: string;
@@ -10,24 +13,19 @@ type Reply = {
   createdAt: string;
 };
 
-type PostStatus = "Open" | "Solved" | "Archived";
-type FilterStatus = "Live" | "Solved" | "Archive";
-
 type Post = {
   id: string;
   name: string;
   tag: string;
   text: string;
-  image?: string;
-  replies: Reply[];
   createdAt: string;
   status: PostStatus;
+  replies: Reply[];
 };
 
 type CommentRow = {
   id: string;
   content: string | null;
-  image_url: string | null;
   parent_id: string | null;
   created_at: string;
   name: string | null;
@@ -46,7 +44,6 @@ type Profile = {
 
 export default function App() {
   const [page, setPage] = useState<"home" | "feed" | "care-plans">("home");
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>("Live");
 
   const [session, setSession] = useState<Session | null>(null);
@@ -60,14 +57,19 @@ export default function App() {
   const [authMessage, setAuthMessage] = useState("");
 
   const [posts, setPosts] = useState<Post[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loadingPosts, setLoadingPosts] = useState(false);
 
   const [tag, setTag] = useState("Idea");
   const [text, setText] = useState("");
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState<string | undefined>(undefined);
-
   const [replyInputs, setReplyInputs] = useState<Record<string, string>>({});
+
+  const currentUserName =
+    profile?.full_name?.trim() ||
+    session?.user?.user_metadata?.full_name ||
+    session?.user?.email?.split("@")[0] ||
+    "User";
+
+  const currentUserEmail = session?.user?.email || "";
 
   const timeAgo = (timestamp: string) => {
     const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
@@ -75,7 +77,6 @@ export default function App() {
     if (seconds < 60) return "just now";
     if (seconds < 3600) return `${Math.floor(seconds / 60)} min ago`;
     if (seconds < 86400) return `${Math.floor(seconds / 3600)} hrs ago`;
-
     return `${Math.floor(seconds / 86400)} days ago`;
   };
 
@@ -91,14 +92,6 @@ export default function App() {
     if (status === "Archived") return "#5b6575";
     return "#d08b28";
   };
-
-  const currentUserName =
-    profile?.full_name?.trim() ||
-    session?.user?.user_metadata?.full_name ||
-    session?.user?.email?.split("@")[0] ||
-    "User";
-
-  const currentUserEmail = session?.user?.email || "";
 
   const ensureProfile = async (user: User, explicitName?: string) => {
     const fallbackName =
@@ -163,11 +156,7 @@ export default function App() {
       setSession(currentSession);
 
       if (currentSession?.user) {
-        try {
-          await ensureProfile(currentSession.user);
-        } catch (err) {
-          console.error("ensureProfile session load error:", err);
-        }
+        await ensureProfile(currentSession.user);
       } else {
         setProfile(null);
       }
@@ -181,11 +170,7 @@ export default function App() {
       setSession(nextSession);
 
       if (nextSession?.user) {
-        try {
-          await ensureProfile(nextSession.user);
-        } catch (err) {
-          console.error("ensureProfile auth change error:", err);
-        }
+        await ensureProfile(nextSession.user);
       } else {
         setProfile(null);
       }
@@ -199,7 +184,7 @@ export default function App() {
   const loadPosts = async () => {
     if (!session) return;
 
-    setLoading(true);
+    setLoadingPosts(true);
 
     const { data, error } = await supabase
       .from("comments")
@@ -208,13 +193,11 @@ export default function App() {
 
     if (error) {
       console.error("Error loading posts:", error);
-      alert(`Load error: ${error.message}`);
-      setLoading(false);
+      setLoadingPosts(false);
       return;
     }
 
     const rows = (data || []) as CommentRow[];
-
     const postRows = rows.filter((row) => !row.parent_id);
     const replyRows = rows.filter((row) => !!row.parent_id);
 
@@ -223,7 +206,6 @@ export default function App() {
       name: post.name || "Anonymous",
       tag: post.tag || "Idea",
       text: post.content || "",
-      image: post.image_url || undefined,
       createdAt: post.created_at,
       status:
         post.status === "Solved" || post.status === "Archived"
@@ -244,7 +226,7 @@ export default function App() {
     }));
 
     setPosts(mappedPosts);
-    setLoading(false);
+    setLoadingPosts(false);
   };
 
   useEffect(() => {
@@ -253,37 +235,12 @@ export default function App() {
     }
   }, [page, session]);
 
-  const uploadImage = async (file: File) => {
-    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, "-")}`;
-
-    const { error } = await supabase.storage
-      .from("comments")
-      .upload(fileName, file);
-
-    if (error) {
-      console.error("Upload error:", error);
-      alert(`Upload error: ${error.message}`);
-      return null;
-    }
-
-    const { data } = supabase.storage.from("comments").getPublicUrl(fileName);
-    return data.publicUrl;
-  };
-
   const addPost = async () => {
     if (!session || !text.trim()) return;
-
-    let imageUrl: string | null = null;
-
-    if (imageFile) {
-      imageUrl = await uploadImage(imageFile);
-      if (!imageUrl) return;
-    }
 
     const { error } = await supabase.from("comments").insert([
       {
         content: text.trim(),
-        image_url: imageUrl,
         parent_id: null,
         name: currentUserName,
         tag,
@@ -300,10 +257,7 @@ export default function App() {
     }
 
     setText("");
-    setImageFile(null);
-    setImagePreview(undefined);
     setTag("Idea");
-
     await loadPosts();
   };
 
@@ -348,19 +302,6 @@ export default function App() {
     }
 
     await loadPosts();
-  };
-
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    setImageFile(file);
-
-    const reader = new FileReader();
-    reader.onloadend = () => {
-      setImagePreview(reader.result as string);
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSignUp = async () => {
@@ -428,15 +369,12 @@ export default function App() {
     if (filter === "Live") {
       return posts.filter((post) => post.status !== "Archived");
     }
-
     if (filter === "Solved") {
       return posts.filter((post) => post.status === "Solved");
     }
-
     if (filter === "Archive") {
       return posts.filter((post) => post.status === "Archived");
     }
-
     return posts;
   }, [posts, filter]);
 
@@ -444,15 +382,12 @@ export default function App() {
     if (status === "Live") {
       return posts.filter((post) => post.status !== "Archived").length;
     }
-
     if (status === "Solved") {
       return posts.filter((post) => post.status === "Solved").length;
     }
-
     if (status === "Archive") {
       return posts.filter((post) => post.status === "Archived").length;
     }
-
     return 0;
   };
 
@@ -535,384 +470,313 @@ export default function App() {
   }
 
   if (page === "care-plans") {
-    return <CarePlansPage />;
+    return <CarePlansPage onBack={() => setPage("home")} />;
   }
 
   if (page === "feed") {
     return (
-      <>
-        <div
-          style={{
-            fontFamily: "Arial, sans-serif",
-            background: "#071535",
-            color: "white",
-            minHeight: "100vh",
-            padding: "40px 20px",
-          }}
-        >
-          <div style={{ maxWidth: "850px", margin: "0 auto" }}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "12px",
-                alignItems: "center",
-                flexWrap: "wrap",
-                marginBottom: "20px",
-              }}
-            >
-              <div>
-                <h1 style={{ margin: 0 }}>Team Feed</h1>
-                <div style={{ color: "#b7c5d9", marginTop: "6px" }}>
-                  Logged in as {currentUserName}
-                </div>
-              </div>
-
-              <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
-                <button style={smallActionButton} onClick={() => setPage("home")}>
-                  ← Back
-                </button>
-                <button
-                  style={{ ...smallActionButton, background: "#5b6575" }}
-                  onClick={handleLogout}
-                >
-                  Logout
-                </button>
+      <div
+        style={{
+          fontFamily: "Arial, sans-serif",
+          background: "#071535",
+          color: "white",
+          minHeight: "100vh",
+          padding: "40px 20px",
+        }}
+      >
+        <div style={{ maxWidth: "850px", margin: "0 auto" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: "12px",
+              alignItems: "center",
+              flexWrap: "wrap",
+              marginBottom: "20px",
+            }}
+          >
+            <div>
+              <h1 style={{ margin: 0 }}>Team Feed</h1>
+              <div style={{ color: "#b7c5d9", marginTop: "6px" }}>
+                Logged in as {currentUserName}
               </div>
             </div>
 
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+              <button style={smallActionButton} onClick={() => setPage("home")}>
+                ← Back
+              </button>
+              <button
+                style={{ ...smallActionButton, background: "#5b6575" }}
+                onClick={handleLogout}
+              >
+                Logout
+              </button>
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#102348",
+              padding: "20px",
+              borderRadius: "14px",
+              marginBottom: "25px",
+              textAlign: "left",
+            }}
+          >
+            <h2 style={{ marginTop: 0 }}>Create Post</h2>
+
+            <div
+              style={{
+                color: "#b7c5d9",
+                marginBottom: "12px",
+                fontSize: "14px",
+              }}
+            >
+              Posting as <strong>{currentUserName}</strong>
+            </div>
+
+            <select
+              value={tag}
+              onChange={(e) => setTag(e.target.value)}
+              style={inputStyle}
+            >
+              <option>Idea</option>
+              <option>Bug</option>
+              <option>Question</option>
+              <option>Update</option>
+            </select>
+
+            <textarea
+              placeholder="Write your post here..."
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              style={textAreaStyle}
+            />
+
+            <button style={liveButton} onClick={addPost}>
+              Post to Feed
+            </button>
+          </div>
+
+          <div
+            style={{
+              display: "flex",
+              gap: "10px",
+              flexWrap: "wrap",
+              marginBottom: "20px",
+            }}
+          >
+            {(["Live", "Solved", "Archive"] as FilterStatus[]).map((status) => (
+              <button
+                key={status}
+                onClick={() => setFilter(status)}
+                style={{
+                  ...filterButton,
+                  background: filter === status ? "#6cc04a" : "#1a2d57",
+                  color: "white",
+                }}
+              >
+                {status} ({countByStatus(status)})
+              </button>
+            ))}
+          </div>
+
+          {loadingPosts ? (
             <div
               style={{
                 background: "#102348",
                 padding: "20px",
                 borderRadius: "14px",
-                marginBottom: "25px",
-                textAlign: "left",
+                textAlign: "center",
               }}
             >
-              <h2 style={{ marginTop: 0 }}>Create Post</h2>
-
-              <div
-                style={{
-                  color: "#b7c5d9",
-                  marginBottom: "12px",
-                  fontSize: "14px",
-                }}
-              >
-                Posting as <strong>{currentUserName}</strong>
-              </div>
-
-              <select
-                value={tag}
-                onChange={(e) => setTag(e.target.value)}
-                style={inputStyle}
-              >
-                <option>Idea</option>
-                <option>Bug</option>
-                <option>Question</option>
-                <option>Update</option>
-              </select>
-
-              <textarea
-                placeholder="Write your post here..."
-                value={text}
-                onChange={(e) => setText(e.target.value)}
-                style={textAreaStyle}
-              />
-
-              <div style={{ marginBottom: "12px" }}>
-                <input type="file" accept="image/*" onChange={handleImageUpload} />
-              </div>
-
-              {imagePreview && (
-                <img
-                  src={imagePreview}
-                  alt="Preview"
-                  style={{
-                    width: "100%",
-                    maxWidth: "250px",
-                    maxHeight: "180px",
-                    objectFit: "cover",
-                    borderRadius: "12px",
-                    marginBottom: "14px",
-                    display: "block",
-                    cursor: "pointer",
-                  }}
-                  onClick={() => setSelectedImage(imagePreview)}
-                />
-              )}
-
-              <button style={liveButton} onClick={addPost}>
-                Post to Feed
-              </button>
+              Loading...
             </div>
-
+          ) : filteredPosts.length === 0 ? (
             <div
               style={{
-                display: "flex",
-                gap: "10px",
-                flexWrap: "wrap",
-                marginBottom: "20px",
+                background: "#102348",
+                padding: "20px",
+                borderRadius: "14px",
+                textAlign: "center",
               }}
             >
-              {(["Live", "Solved", "Archive"] as FilterStatus[]).map((status) => (
-                <button
-                  key={status}
-                  onClick={() => setFilter(status)}
-                  style={{
-                    ...filterButton,
-                    background: filter === status ? "#6cc04a" : "#1a2d57",
-                    color: "white",
-                  }}
-                >
-                  {status} ({countByStatus(status)})
-                </button>
-              ))}
+              No posts in this filter
             </div>
-
-            {loading ? (
+          ) : (
+            filteredPosts.map((post) => (
               <div
+                key={post.id}
                 style={{
                   background: "#102348",
-                  padding: "20px",
+                  padding: "18px",
                   borderRadius: "14px",
-                  textAlign: "center",
+                  marginBottom: "18px",
+                  textAlign: "left",
+                  opacity: post.status === "Archived" ? 0.75 : 1,
                 }}
               >
-                Loading...
-              </div>
-            ) : filteredPosts.length === 0 ? (
-              <div
-                style={{
-                  background: "#102348",
-                  padding: "20px",
-                  borderRadius: "14px",
-                  textAlign: "center",
-                }}
-              >
-                No posts in this filter
-              </div>
-            ) : (
-              filteredPosts.map((post) => (
                 <div
-                  key={post.id}
                   style={{
-                    background: "#102348",
-                    padding: "18px",
-                    borderRadius: "14px",
-                    marginBottom: "18px",
-                    textAlign: "left",
-                    opacity: post.status === "Archived" ? 0.75 : 1,
+                    display: "flex",
+                    justifyContent: "space-between",
+                    gap: "10px",
+                    alignItems: "center",
+                    marginBottom: "10px",
+                    flexWrap: "wrap",
                   }}
                 >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      gap: "10px",
-                      alignItems: "center",
-                      marginBottom: "10px",
-                      flexWrap: "wrap",
-                    }}
-                  >
-                    <div>
-                      <strong>{post.name}</strong>
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "#a7b4c8",
-                          marginTop: "4px",
-                        }}
-                      >
-                        {timeAgo(post.createdAt)}
-                      </div>
-                    </div>
-
+                  <div>
+                    <strong>{post.name}</strong>
                     <div
                       style={{
-                        display: "flex",
-                        gap: "8px",
-                        flexWrap: "wrap",
-                        alignItems: "center",
+                        fontSize: "12px",
+                        color: "#a7b4c8",
+                        marginTop: "4px",
                       }}
                     >
-                      <span
-                        style={{
-                          background: tagColor(post.tag),
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          fontSize: "13px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {post.tag}
-                      </span>
-
-                      <span
-                        style={{
-                          background: statusColor(post.status),
-                          padding: "6px 10px",
-                          borderRadius: "999px",
-                          fontSize: "13px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {post.status}
-                      </span>
+                      {timeAgo(post.createdAt)}
                     </div>
                   </div>
-
-                  <div style={{ whiteSpace: "pre-wrap", marginBottom: "12px" }}>
-                    {post.text}
-                  </div>
-
-                  {post.image && (
-                    <img
-                      src={post.image}
-                      alt="Post"
-                      style={{
-                        width: "100%",
-                        maxWidth: "250px",
-                        maxHeight: "180px",
-                        objectFit: "cover",
-                        borderRadius: "12px",
-                        marginBottom: "14px",
-                        display: "block",
-                        cursor: "pointer",
-                      }}
-                      onClick={() => setSelectedImage(post.image)}
-                    />
-                  )}
 
                   <div
                     style={{
                       display: "flex",
-                      gap: "10px",
+                      gap: "8px",
                       flexWrap: "wrap",
-                      marginBottom: "14px",
+                      alignItems: "center",
                     }}
                   >
-                    {post.status !== "Open" && (
-                      <button
-                        style={smallActionButton}
-                        onClick={() => updatePostStatus(post.id, "Open")}
-                      >
-                        Re-open
-                      </button>
-                    )}
-
-                    {post.status !== "Solved" && (
-                      <button
-                        style={smallActionButton}
-                        onClick={() => updatePostStatus(post.id, "Solved")}
-                      >
-                        Mark Solved
-                      </button>
-                    )}
-
-                    {post.status !== "Archived" && (
-                      <button
-                        style={{ ...smallActionButton, background: "#5b6575" }}
-                        onClick={() => updatePostStatus(post.id, "Archived")}
-                      >
-                        Archive
-                      </button>
-                    )}
-                  </div>
-
-                  <div
-                    style={{
-                      background: "#0b1a38",
-                      padding: "14px",
-                      borderRadius: "12px",
-                      marginTop: "10px",
-                    }}
-                  >
-                    <h3 style={{ marginTop: 0, fontSize: "16px" }}>Replies</h3>
-
-                    {post.replies.length === 0 ? (
-                      <p style={{ color: "#b7c5d9" }}>No replies yet</p>
-                    ) : (
-                      post.replies.map((reply) => (
-                        <div
-                          key={reply.id}
-                          style={{
-                            background: "#1a2d57",
-                            padding: "10px",
-                            borderRadius: "10px",
-                            marginBottom: "10px",
-                          }}
-                        >
-                          <strong>{reply.name}</strong>
-                          <div
-                            style={{
-                              fontSize: "12px",
-                              color: "#a7b4c8",
-                              marginTop: "4px",
-                            }}
-                          >
-                            {timeAgo(reply.createdAt)}
-                          </div>
-                          <div style={{ marginTop: "5px" }}>{reply.text}</div>
-                        </div>
-                      ))
-                    )}
-
-                    <textarea
-                      placeholder="Write a reply..."
-                      value={replyInputs[post.id] || ""}
-                      onChange={(e) =>
-                        setReplyInputs((prev) => ({
-                          ...prev,
-                          [post.id]: e.target.value,
-                        }))
-                      }
+                    <span
                       style={{
-                        ...textAreaStyle,
-                        minHeight: "80px",
-                        marginBottom: "10px",
+                        background: tagColor(post.tag),
+                        padding: "6px 10px",
+                        borderRadius: "999px",
+                        fontSize: "13px",
+                        fontWeight: "bold",
                       }}
-                    />
+                    >
+                      {post.tag}
+                    </span>
 
-                    <button style={liveButton} onClick={() => addReply(post.id)}>
-                      Reply
-                    </button>
+                    <span
+                      style={{
+                        background: statusColor(post.status),
+                        padding: "6px 10px",
+                        borderRadius: "999px",
+                        fontSize: "13px",
+                        fontWeight: "bold",
+                      }}
+                    >
+                      {post.status}
+                    </span>
                   </div>
                 </div>
-              ))
-            )}
-          </div>
-        </div>
 
-        {selectedImage && (
-          <div
-            onClick={() => setSelectedImage(null)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0, 0, 0, 0.85)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              zIndex: 9999,
-              padding: "20px",
-              cursor: "pointer",
-            }}
-          >
-            <img
-              src={selectedImage}
-              alt="Full size"
-              onClick={(e) => e.stopPropagation()}
-              style={{
-                maxWidth: "90%",
-                maxHeight: "90%",
-                borderRadius: "12px",
-                boxShadow: "0 0 30px rgba(0,0,0,0.4)",
-              }}
-            />
-          </div>
-        )}
-      </>
+                <div style={{ whiteSpace: "pre-wrap", marginBottom: "12px" }}>
+                  {post.text}
+                </div>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "10px",
+                    flexWrap: "wrap",
+                    marginBottom: "14px",
+                  }}
+                >
+                  {post.status !== "Open" && (
+                    <button
+                      style={smallActionButton}
+                      onClick={() => updatePostStatus(post.id, "Open")}
+                    >
+                      Re-open
+                    </button>
+                  )}
+
+                  {post.status !== "Solved" && (
+                    <button
+                      style={smallActionButton}
+                      onClick={() => updatePostStatus(post.id, "Solved")}
+                    >
+                      Mark Solved
+                    </button>
+                  )}
+
+                  {post.status !== "Archived" && (
+                    <button
+                      style={{ ...smallActionButton, background: "#5b6575" }}
+                      onClick={() => updatePostStatus(post.id, "Archived")}
+                    >
+                      Archive
+                    </button>
+                  )}
+                </div>
+
+                <div
+                  style={{
+                    background: "#0b1a38",
+                    padding: "14px",
+                    borderRadius: "12px",
+                    marginTop: "10px",
+                  }}
+                >
+                  <h3 style={{ marginTop: 0, fontSize: "16px" }}>Replies</h3>
+
+                  {post.replies.length === 0 ? (
+                    <p style={{ color: "#b7c5d9" }}>No replies yet</p>
+                  ) : (
+                    post.replies.map((reply) => (
+                      <div
+                        key={reply.id}
+                        style={{
+                          background: "#1a2d57",
+                          padding: "10px",
+                          borderRadius: "10px",
+                          marginBottom: "10px",
+                        }}
+                      >
+                        <strong>{reply.name}</strong>
+                        <div
+                          style={{
+                            fontSize: "12px",
+                            color: "#a7b4c8",
+                            marginTop: "4px",
+                          }}
+                        >
+                          {timeAgo(reply.createdAt)}
+                        </div>
+                        <div style={{ marginTop: "5px" }}>{reply.text}</div>
+                      </div>
+                    ))
+                  )}
+
+                  <textarea
+                    placeholder="Write a reply..."
+                    value={replyInputs[post.id] || ""}
+                    onChange={(e) =>
+                      setReplyInputs((prev) => ({
+                        ...prev,
+                        [post.id]: e.target.value,
+                      }))
+                    }
+                    style={{
+                      ...textAreaStyle,
+                      minHeight: "80px",
+                      marginBottom: "10px",
+                    }}
+                  />
+
+                  <button style={liveButton} onClick={() => addReply(post.id)}>
+                    Reply
+                  </button>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
     );
   }
 
@@ -990,10 +854,7 @@ export default function App() {
             </p>
           </a>
 
-          <button
-            style={liveButton}
-            onClick={() => setPage("care-plans")}
-          >
+          <button style={liveButton} onClick={() => setPage("care-plans")}>
             Care Plans
           </button>
 
