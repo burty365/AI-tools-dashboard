@@ -154,51 +154,26 @@ export default function App() {
     setProfile(data as Profile);
   };
 
-  useEffect(() => {
-    const boot = async () => {
+ useEffect(() => {
+  const {
+    data: { subscription },
+  } = supabase.auth.onAuthStateChange(async (_event, session) => {
+    setSession(session);
+
+    if (session?.user) {
       try {
-        const { data, error } = await supabase.auth.getSession();
-
-        if (error) {
-          console.error("Session error:", error);
-        }
-
-        const session = data?.session ?? null;
-        setSession(session);
-
-        if (session?.user) {
-          try {
-            await ensureProfile(session.user);
-          } catch (err) {
-            console.error("ensureProfile boot error:", err);
-          }
-        }
+        await ensureProfile(session.user);
       } catch (err) {
-        console.error("auth boot error:", err);
+        console.error("ensureProfile auth change error:", err);
       }
-    };
+    } else {
+      setProfile(null);
+    }
+  });
 
-    boot();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      setSession(session);
-
-      if (session?.user) {
-        try {
-          await ensureProfile(session.user);
-        } catch (err) {
-          console.error("ensureProfile auth change error:", err);
-        }
-      } else {
-        setProfile(null);
-      }
-    });
-
-     subscription.unsubscribe();
-    };
-  }, []);
+  return () => {
+    subscription.unsubscribe();
+  };
 
   const loadPosts = async () => {
     if (!session) return;
