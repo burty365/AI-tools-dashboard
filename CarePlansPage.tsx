@@ -23,7 +23,9 @@ export default function CarePlansPage({ onBack }: Props) {
       try {
         const { data, error } = await supabase
           .from("care_plans")
-          .select("id, customer_name, address, plan_type, next_service_date, payment_status")
+          .select(
+            "id, customer_name, address, plan_type, next_service_date, payment_status"
+          )
           .order("customer_name", { ascending: true });
 
         if (error) {
