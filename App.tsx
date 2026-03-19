@@ -154,26 +154,47 @@ export default function App() {
     setProfile(data as Profile);
   };
 
- useEffect(() => {
-  const {
-    data: { subscription },
-  } = supabase.auth.onAuthStateChange(async (_event, session) => {
-    setSession(session);
+  useEffect(() => {
+    const getSession = async () => {
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
 
-    if (session?.user) {
-      try {
-        await ensureProfile(session.user);
-      } catch (err) {
-        console.error("ensureProfile auth change error:", err);
+      setSession(session);
+
+      if (session?.user) {
+        try {
+          await ensureProfile(session.user);
+        } catch (err) {
+          console.error("ensureProfile session load error:", err);
+        }
+      } else {
+        setProfile(null);
       }
-    } else {
-      setProfile(null);
-    }
-  });
+    };
 
-  return () => {
-    subscription.unsubscribe();
-  };
+    getSession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      setSession(nextSession);
+
+      if (nextSession?.user) {
+        try {
+          await ensureProfile(nextSession.user);
+        } catch (err) {
+          console.error("ensureProfile auth change error:", err);
+        }
+      } else {
+        setProfile(null);
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const loadPosts = async () => {
     if (!session) return;
@@ -290,7 +311,6 @@ export default function App() {
     if (!session) return;
 
     const replyText = (replyInputs[postId] || "").trim();
-
     if (!replyText) return;
 
     const { error } = await supabase.from("comments").insert([
@@ -511,9 +531,11 @@ export default function App() {
       </div>
     );
   }
-if (window.location.pathname === "/care-plans") {
-  return <CarePlansPage />;
-}
+
+  if (window.location.pathname === "/care-plans") {
+    return <CarePlansPage />;
+  }
+
   if (page === "feed") {
     return (
       <>
@@ -524,8 +546,8 @@ if (window.location.pathname === "/care-plans") {
             color: "white",
             minHeight: "100vh",
             padding: "40px 20px",
-          }}>
-        
+          }}
+        >
           <div style={{ maxWidth: "850px", margin: "0 auto" }}>
             <div
               style={{
@@ -939,20 +961,30 @@ if (window.location.pathname === "/care-plans") {
             Team Feed
           </button>
 
-<a
-href="https://nuage-gmail-extractor.vercel.app/"  style={liveButton}
->
-  <div className="tool-card-header">
-    <h3>Gmail Converter</h3>
-    <span className="beta-badge">BETA</span>
-  </div>
+          <a
+            href="https://nuage-gmail-extractor.vercel.app/"
+            style={liveButton}
+          >
+            <div className="tool-card-header">
+              <h3>Gmail Converter</h3>
+              <span className="beta-badge">BETA</span>
+            </div>
 
-  <p>
-    Convert long email chains into cleaner, more manageable notes for the office
-    team to add into Commusoft.
-  </p>
-</a>
-          <button style={comingButton}>🔒 Coming Soon</button>
+            <p>
+              Convert long email chains into cleaner, more manageable notes for the office
+              team to add into Commusoft.
+            </p>
+          </a>
+
+          <button
+            style={liveButton}
+            onClick={() => {
+              window.location.href = "/care-plans";
+            }}
+          >
+            Care Plans
+          </button>
+
           <button style={comingButton}>🔒 Coming Soon</button>
           <button style={comingButton}>🔒 Coming Soon</button>
           <button style={comingButton}>🔒 Coming Soon</button>
