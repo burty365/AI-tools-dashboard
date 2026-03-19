@@ -1,4 +1,5 @@
-const [page, setPage] = useState<"home" | "feed" | "care-plans">("home");
+import CarePlansPage from "./CarePlansPage";
+import { useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
 
@@ -44,7 +45,7 @@ type Profile = {
 };
 
 export default function App() {
-  const [page, setPage] = useState<"home" | "feed">("home");
+  const [page, setPage] = useState<"home" | "feed" | "care-plans">("home");
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterStatus>("Live");
 
@@ -156,14 +157,14 @@ export default function App() {
   useEffect(() => {
     const getSession = async () => {
       const {
-        data: { session },
+        data: { session: currentSession },
       } = await supabase.auth.getSession();
 
-      setSession(session);
+      setSession(currentSession);
 
-      if (session?.user) {
+      if (currentSession?.user) {
         try {
-          await ensureProfile(session.user);
+          await ensureProfile(currentSession.user);
         } catch (err) {
           console.error("ensureProfile session load error:", err);
         }
@@ -524,16 +525,18 @@ export default function App() {
           </button>
 
           {authMessage && (
-            <div style={{ color: "#b7c5d9", marginTop: "14px" }}>{authMessage}</div>
+            <div style={{ color: "#b7c5d9", marginTop: "14px" }}>
+              {authMessage}
+            </div>
           )}
         </div>
       </div>
     );
   }
 
-if (page === "care-plans") {
-  return <CarePlansPage />;
-}
+  if (page === "care-plans") {
+    return <CarePlansPage />;
+  }
 
   if (page === "feed") {
     return (
@@ -714,7 +717,13 @@ if (page === "care-plans") {
                   >
                     <div>
                       <strong>{post.name}</strong>
-                      <div style={{ fontSize: "12px", color: "#a7b4c8", marginTop: "4px" }}>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#a7b4c8",
+                          marginTop: "4px",
+                        }}
+                      >
                         {timeAgo(post.createdAt)}
                       </div>
                     </div>
@@ -835,7 +844,13 @@ if (page === "care-plans") {
                           }}
                         >
                           <strong>{reply.name}</strong>
-                          <div style={{ fontSize: "12px", color: "#a7b4c8", marginTop: "4px" }}>
+                          <div
+                            style={{
+                              fontSize: "12px",
+                              color: "#a7b4c8",
+                              marginTop: "4px",
+                            }}
+                          >
                             {timeAgo(reply.createdAt)}
                           </div>
                           <div style={{ marginTop: "5px" }}>{reply.text}</div>
@@ -964,22 +979,23 @@ if (page === "care-plans") {
             href="https://nuage-gmail-extractor.vercel.app/"
             style={liveButton}
           >
-            <div className="tool-card-header">
-              <h3>Gmail Converter</h3>
-              <span className="beta-badge">BETA</span>
+            <div>
+              <h3 style={{ margin: 0 }}>Gmail Converter</h3>
+              <div style={{ fontSize: "12px", fontWeight: "bold" }}>BETA</div>
             </div>
 
-            <p>
+            <p style={{ margin: 0 }}>
               Convert long email chains into cleaner, more manageable notes for the office
               team to add into Commusoft.
             </p>
           </a>
 
-         <button
-  style={liveButton}
-  onClick={() => setPage("care-plans")}
-  Care Plans
-</button>
+          <button
+            style={liveButton}
+            onClick={() => setPage("care-plans")}
+          >
+            Care Plans
+          </button>
 
           <button style={comingButton}>🔒 Coming Soon</button>
           <button style={comingButton}>🔒 Coming Soon</button>
