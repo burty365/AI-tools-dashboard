@@ -1,3 +1,4 @@
+import CarePlansPage from "./CarePlansPage";
 import { useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
@@ -195,8 +196,7 @@ export default function App() {
       }
     });
 
-    return () => {
-      subscription.unsubscribe();
+     subscription.unsubscribe();
     };
   }, []);
 
@@ -536,7 +536,9 @@ export default function App() {
       </div>
     );
   }
-
+if (window.location.pathname === "/care-plans") {
+  return <CarePlansPage />;
+}
   if (page === "feed") {
     return (
       <>
