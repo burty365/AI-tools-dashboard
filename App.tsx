@@ -549,7 +549,7 @@ if (window.location.pathname === "/care-plans") {
             color: "white",
             minHeight: "100vh",
             padding: "40px 20px",
-          }}
+          }}>
         
           <div style={{ maxWidth: "850px", margin: "0 auto" }}>
             <div
