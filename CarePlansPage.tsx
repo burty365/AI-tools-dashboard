@@ -16,21 +16,15 @@ type Props = {
 
 export default function CarePlansPage({ onBack }: Props) {
   const [plans, setPlans] = useState<CarePlan[]>([]);
-  const [message, setMessage] = useState("Loading care plans...");
-  const [showForm, setShowForm] = useState(false);
-  const [saving, setSaving] = useState(false);
-
-  const [customerName, setCustomerName] = useState("");
-  const [address, setAddress] = useState("");
-  const [planType, setPlanType] = useState("");
-  const [nextServiceDate, setNextServiceDate] = useState("");
-  const [paymentStatus, setPaymentStatus] = useState("Active");
+  const [message, setMessage] = useState("Starting...");
+  const [debug, setDebug] = useState("Not started");
 
   const loadPlans = async () => {
-    console.log("loadPlans fired");
+    setMessage("Loading care plans...");
+    setDebug("Step 1: loadPlans started");
 
     try {
-      setMessage("Loading care plans...");
+      setDebug("Step 2: checking Supabase query");
 
       const { data, error } = await supabase
         .from("care_plans")
@@ -39,11 +33,9 @@ export default function CarePlansPage({ onBack }: Props) {
         )
         .order("customer_name", { ascending: true });
 
-      console.log("Supabase response:", data, error);
-
       if (error) {
-        console.error("Supabase error:", error);
-        setMessage("Error: " + error.message);
+        setDebug(`Step 3: Supabase error - ${error.message}`);
+        setMessage(`Error: ${error.message}`);
         return;
       }
 
@@ -51,68 +43,24 @@ export default function CarePlansPage({ onBack }: Props) {
       setPlans(rows);
 
       if (rows.length === 0) {
+        setDebug("Step 3: query worked, no rows found");
         setMessage("No care plans found.");
         return;
       }
 
+      setDebug(`Step 3: query worked, rows found = ${rows.length}`);
       setMessage("");
     } catch (err) {
-      console.error("loadPlans crashed:", err);
-      setMessage("App crashed loading care plans.");
+      const errorMessage =
+        err instanceof Error ? err.message : "Unknown crash";
+      setDebug(`Step 3: crashed - ${errorMessage}`);
+      setMessage(`App crashed: ${errorMessage}`);
     }
   };
 
   useEffect(() => {
     loadPlans();
   }, []);
-
-  const resetForm = () => {
-    setCustomerName("");
-    setAddress("");
-    setPlanType("");
-    setNextServiceDate("");
-    setPaymentStatus("Active");
-  };
-
-  const handleAddPlan = async () => {
-    if (!customerName.trim()) {
-      alert("Please enter a customer name.");
-      return;
-    }
-
-    console.log("handleAddPlan started");
-
-    try {
-      setSaving(true);
-
-      const { error } = await supabase.from("care_plans").insert([
-        {
-          customer_name: customerName.trim(),
-          address: address.trim() || null,
-          plan_type: planType.trim() || null,
-          next_service_date: nextServiceDate || null,
-          payment_status: paymentStatus || null,
-        },
-      ]);
-
-      console.log("insert response:", error);
-
-      if (error) {
-        console.error("Insert error:", error);
-        alert("Error saving care plan: " + error.message);
-        return;
-      }
-
-      resetForm();
-      setShowForm(false);
-      await loadPlans();
-    } catch (err) {
-      console.error("handleAddPlan crashed:", err);
-      alert("Something went wrong while saving the care plan.");
-    } finally {
-      setSaving(false);
-    }
-  };
 
   return (
     <div
@@ -136,71 +84,16 @@ export default function CarePlansPage({ onBack }: Props) {
           <button onClick={onBack} style={buttonStyle}>
             Back to Dashboard
           </button>
-
-          <button
-            onClick={() => setShowForm((prev) => !prev)}
-            style={buttonStyle}
-          >
-            {showForm ? "Close Form" : "Add Care Plan"}
-          </button>
         </div>
 
-        <h1 style={{ marginTop: 0 }}>Care Plans</h1>
-        <p style={{ color: "#b7c5d9", marginBottom: "24px" }}>
+        <h1 style={{ marginTop: 0 }}>Care Plans Debug</h1>
+        <p style={{ color: "#b7c5d9", marginBottom: "12px" }}>
           Boiler care plan customers and upcoming services.
         </p>
 
-        {showForm && (
-          <div style={cardStyle}>
-            <h2 style={{ marginTop: 0 }}>New Care Plan</h2>
-
-            <input
-              value={customerName}
-              onChange={(e) => setCustomerName(e.target.value)}
-              placeholder="Customer name"
-              style={inputStyle}
-            />
-
-            <input
-              value={address}
-              onChange={(e) => setAddress(e.target.value)}
-              placeholder="Address"
-              style={inputStyle}
-            />
-
-            <input
-              value={planType}
-              onChange={(e) => setPlanType(e.target.value)}
-              placeholder="Plan type"
-              style={inputStyle}
-            />
-
-            <input
-              type="date"
-              value={nextServiceDate}
-              onChange={(e) => setNextServiceDate(e.target.value)}
-              style={inputStyle}
-            />
-
-            <select
-              value={paymentStatus}
-              onChange={(e) => setPaymentStatus(e.target.value)}
-              style={inputStyle}
-            >
-              <option value="Active">Active</option>
-              <option value="Paused">Paused</option>
-              <option value="Cancelled">Cancelled</option>
-            </select>
-
-            <button
-              onClick={handleAddPlan}
-              style={buttonStyle}
-              disabled={saving}
-            >
-              {saving ? "Saving..." : "Save Care Plan"}
-            </button>
-          </div>
-        )}
+        <div style={debugStyle}>
+          <strong>Debug:</strong> {debug}
+        </div>
 
         {message ? (
           <div style={cardStyle}>{message}</div>
@@ -257,13 +150,12 @@ const cardStyle = {
   marginBottom: "20px",
 };
 
-const inputStyle = {
-  width: "100%",
-  padding: "12px",
-  borderRadius: "10px",
-  border: "none",
-  marginBottom: "12px",
-  boxSizing: "border-box" as const,
+const debugStyle = {
+  background: "#3a2a12",
+  color: "#ffd27a",
+  padding: "14px",
+  borderRadius: "14px",
+  marginBottom: "20px",
 };
 
 const thStyle = {
