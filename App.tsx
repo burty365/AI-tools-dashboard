@@ -1,5 +1,4 @@
 const [page, setPage] = useState<"home" | "feed" | "care-plans">("home");
-import { useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
 
@@ -976,10 +975,9 @@ if (page === "care-plans") {
             </p>
           </a>
 
-          <button
+         <button
   style={liveButton}
   onClick={() => setPage("care-plans")}
->
   Care Plans
 </button>
 
