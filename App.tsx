@@ -1,4 +1,4 @@
-import CarePlansPage from "./CarePlansPage";
+const [page, setPage] = useState<"home" | "feed" | "care-plans">("home");
 import { useEffect, useMemo, useState } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase } from "./src/lib/supabase";
@@ -532,9 +532,9 @@ export default function App() {
     );
   }
 
-  if (window.location.pathname === "/care-plans") {
-    return <CarePlansPage />;
-  }
+if (page === "care-plans") {
+  return <CarePlansPage />;
+}
 
   if (page === "feed") {
     return (
@@ -977,13 +977,11 @@ export default function App() {
           </a>
 
           <button
-            style={liveButton}
-            onClick={() => {
-              window.location.href = "/care-plans";
-            }}
-          >
-            Care Plans
-          </button>
+  style={liveButton}
+  onClick={() => setPage("care-plans")}
+>
+  Care Plans
+</button>
 
           <button style={comingButton}>🔒 Coming Soon</button>
           <button style={comingButton}>🔒 Coming Soon</button>
