@@ -27,43 +27,40 @@ export default function CarePlansPage({ onBack }: Props) {
   const [paymentStatus, setPaymentStatus] = useState("Active");
 
   const loadPlans = async () => {
-  console.log("🚀 loadPlans fired");
+    console.log("loadPlans fired");
 
-  try {
-    setMessage("Loading care plans...");
+    try {
+      setMessage("Loading care plans...");
 
-    const { data, error } = await supabase
-      .from("care_plans")
-      .select(
-        "id, customer_name, address, plan_type, next_service_date, payment_status"
-      )
-      .order("customer_name", { ascending: true });
+      const { data, error } = await supabase
+        .from("care_plans")
+        .select(
+          "id, customer_name, address, plan_type, next_service_date, payment_status"
+        )
+        .order("customer_name", { ascending: true });
 
-    console.log("📦 Supabase response:", data, error);
+      console.log("Supabase response:", data, error);
 
-    if (error) {
-      console.error("❌ Supabase error:", error);
-      setMessage("Error: " + error.message);
-      return;
+      if (error) {
+        console.error("Supabase error:", error);
+        setMessage("Error: " + error.message);
+        return;
+      }
+
+      const rows = (data as CarePlan[]) || [];
+      setPlans(rows);
+
+      if (rows.length === 0) {
+        setMessage("No care plans found.");
+        return;
+      }
+
+      setMessage("");
+    } catch (err) {
+      console.error("loadPlans crashed:", err);
+      setMessage("App crashed loading care plans.");
     }
-
-    const rows = (data as CarePlan[]) || [];
-
-    console.log("✅ Rows:", rows);
-
-    setPlans(rows);
-
-    if (rows.length === 0) {
-      setMessage("No care plans found.");
-      return;
-    }
-
-    setMessage("");
-  } catch (err) {
-    console.error("💥 CRASH:", err);
-    setMessage("App crashed loading care plans.");
-  }
-};
+  };
 
   useEffect(() => {
     loadPlans();
@@ -83,29 +80,38 @@ export default function CarePlansPage({ onBack }: Props) {
       return;
     }
 
-    setSaving(true);
+    console.log("handleAddPlan started");
 
-    const { error } = await supabase.from("care_plans").insert([
-      {
-        customer_name: customerName.trim(),
-        address: address.trim() || null,
-        plan_type: planType.trim() || null,
-        next_service_date: nextServiceDate || null,
-        payment_status: paymentStatus || null,
-      },
-    ]);
+    try {
+      setSaving(true);
 
-    setSaving(false);
+      const { error } = await supabase.from("care_plans").insert([
+        {
+          customer_name: customerName.trim(),
+          address: address.trim() || null,
+          plan_type: planType.trim() || null,
+          next_service_date: nextServiceDate || null,
+          payment_status: paymentStatus || null,
+        },
+      ]);
 
-    if (error) {
-      console.error("Insert error:", error);
-      alert("Error saving care plan: " + error.message);
-      return;
+      console.log("insert response:", error);
+
+      if (error) {
+        console.error("Insert error:", error);
+        alert("Error saving care plan: " + error.message);
+        return;
+      }
+
+      resetForm();
+      setShowForm(false);
+      await loadPlans();
+    } catch (err) {
+      console.error("handleAddPlan crashed:", err);
+      alert("Something went wrong while saving the care plan.");
+    } finally {
+      setSaving(false);
     }
-
-    resetForm();
-    setShowForm(false);
-    await loadPlans();
   };
 
   return (
@@ -186,7 +192,11 @@ export default function CarePlansPage({ onBack }: Props) {
               <option value="Cancelled">Cancelled</option>
             </select>
 
-            <button onClick={handleAddPlan} style={buttonStyle} disabled={saving}>
+            <button
+              onClick={handleAddPlan}
+              style={buttonStyle}
+              disabled={saving}
+            >
               {saving ? "Saving..." : "Save Care Plan"}
             </button>
           </div>
