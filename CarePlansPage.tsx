@@ -27,18 +27,30 @@ export default function CarePlansPage({ onBack }: Props) {
   const [paymentStatus, setPaymentStatus] = useState("Active");
 
   const loadPlans = async () => {
+  console.log("🚀 loadPlans fired");
+
+  try {
+    setMessage("Loading care plans...");
+
     const { data, error } = await supabase
       .from("care_plans")
-      .select("id, customer_name, address, plan_type, next_service_date, payment_status")
+      .select(
+        "id, customer_name, address, plan_type, next_service_date, payment_status"
+      )
       .order("customer_name", { ascending: true });
 
+    console.log("📦 Supabase response:", data, error);
+
     if (error) {
-      console.error("Supabase error:", error);
+      console.error("❌ Supabase error:", error);
       setMessage("Error: " + error.message);
       return;
     }
 
     const rows = (data as CarePlan[]) || [];
+
+    console.log("✅ Rows:", rows);
+
     setPlans(rows);
 
     if (rows.length === 0) {
@@ -47,7 +59,11 @@ export default function CarePlansPage({ onBack }: Props) {
     }
 
     setMessage("");
-  };
+  } catch (err) {
+    console.error("💥 CRASH:", err);
+    setMessage("App crashed loading care plans.");
+  }
+};
 
   useEffect(() => {
     loadPlans();
